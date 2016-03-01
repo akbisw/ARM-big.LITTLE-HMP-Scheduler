@@ -146,10 +146,10 @@ int main (void)
       }
     }
     /*  Collect and store the CPU Temperature Data  */
-    for (big_cpu_count = 5; big_cpu_count < 9; big_cpu_count++)
+    for (big_cpu_count = 4; big_cpu_count < 8; big_cpu_count++)
     {
       cpu_temp(cpu_temp_fptr, &temp);
-      printf("cpu%d_%s: %d\n", big_cpu_count, "temp", temp);
+      printf("\tCPU%d %s: %d\n", big_cpu_count, "Temp", temp/1000);
       writeCSV(big_cpu_count, temp, "Temp");
     }
     // GPU TEMP
