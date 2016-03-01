@@ -43,12 +43,12 @@ int read_fields (FILE *fp, unsigned long long int *fields)
 
 /* Write the CPU Usage metrics to individual files */
 /* (CPU num, the metric value, the metric type) */
-void writeCSV(int cpu_num, float value, char* metric_type)
+void writeCSV(int cpu_num, float value, char* metric_name, char* metric_type)
 {
         time_t t = time(NULL);
         struct tm tm = *localtime(&t);
         char file_name[14];
-        sprintf(file_name, "cpu%d_%s.csv", cpu_num, metric_type);
+        sprintf(file_name, "%s%d_%s.csv", metric_name, cpu_num, metric_type);
         FILE *f_ptr = fopen(file_name, "a");
         fprintf(f_ptr, "%d-%d-%d %d:%d:%d,%3.2lf\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, value);
         fclose(f_ptr);
@@ -65,6 +65,23 @@ int cpu_temp (FILE *fp, int *temp)
   /* line is sensor : value. */
   // * skips the match.
   retval = sscanf (buffer, "s%*s : %d", temp);
+  if (retval == 0)
+  { return -1; }
+  if (retval == 1) /* Atleast 4 fields is to be read */
+  { return 1; }
+}
+
+/* Read CPU POWER! */
+int cpu_power (FILE *fp, float *power)
+{
+  int retval;
+  char buffer[20];
+
+  if (!fgets (buffer, 20, fp))
+  { perror ("Error"); }
+  /* line is sensor : value. */
+  // * skips the match.
+  retval = sscanf (buffer, "%f", power);
   if (retval == 0)
   { return -1; }
   if (retval == 1) /* Atleast 4 fields is to be read */
@@ -90,6 +107,20 @@ int main (void)
     perror ("Error");
   }
 
+  /* Voltage/AMP/Watt Readings */
+  // A7VAW A15VAW
+  float power_readings[6];
+  FILE *a7_volt, *a7_amp, *a7_watt, *a15_volt, *a15_amp, *a15_watt;
+  a7_volt = fopen ("/sys/bus/i2c/drivers/INA231/3-0045/sensor_V", "r");
+  a7_amp = fopen ("/sys/bus/i2c/drivers/INA231/3-0045/sensor_A", "r");
+  a7_watt = fopen ("/sys/bus/i2c/drivers/INA231/3-0045/sensor_W", "r");
+  a15_volt = fopen ("/sys/bus/i2c/drivers/INA231/3-0040/sensor_V", "r");
+  a15_amp = fopen ("/sys/bus/i2c/drivers/INA231/3-0040/sensor_A", "r");
+  a15_watt = fopen ("/sys/bus/i2c/drivers/INA231/3-0040/sensor_W", "r");
+  
+  int power_count;
+  float power_val;
+  FILE *powerfptr[6] = {a7_volt, a7_amp, a7_watt, a15_volt, a15_amp, a15_watt}; 
   /* Parse the /proc/stat file until you find cpu */
   // This loops until it reads all 9 cpu lines
   // Goal is to count how many cpus the system has
@@ -114,6 +145,12 @@ int main (void)
     fseek (cpu_temp_fptr, 0, SEEK_SET);
     /* Flush the file pointer to update the new cpu values stored by kernel */
     fflush (cpu_temp_fptr);
+    /* CPU Power File Pointers seek to beginning  */
+    for (power_count = 0; power_count < 6; power_count++)
+    {
+      fseek (powerfptr[power_count], 0, SEEK_SET);    
+      fflush (powerfptr[power_count]);
+    }
 
     // keep count of how many time cpu stats has been updated
     printf ("[Update cycle %d]\n", update_cycle);
@@ -142,7 +179,7 @@ int main (void)
       else
       { 
         printf ("\tCPU%d Usage: %3.2lf%%\n", count - 1, percent_usage);
-        writeCSV(count - 1, percent_usage, "Usage");
+        writeCSV(count - 1, percent_usage, "CPU", "Usage");
       }
     }
     /*  Collect and store the CPU Temperature Data  */
@@ -150,12 +187,36 @@ int main (void)
     {
       cpu_temp(cpu_temp_fptr, &temp);
       printf("\tCPU%d %s: %d\n", big_cpu_count, "Temp", temp/1000);
-      writeCSV(big_cpu_count, temp, "Temp");
+      writeCSV(big_cpu_count, temp, "CPU", "Temp");
     }
     // GPU TEMP
     cpu_temp(cpu_temp_fptr, &temp);
-    /*  */
+     
+    /* Power Readings of A7 cluster and A15 cluster */
+    cpu_power(a7_volt, &power_val);
+    printf("\ta7 %s: %0.4f\n", "Voltage", power_val);
+    writeCSV(7, power_val, "a", "Voltage");
 
+    cpu_power(a7_amp, &power_val);
+    printf("\ta7 %s: %0.4f\n", "Amp", power_val);
+    writeCSV(7, power_val, "a", "Amp");
+
+    cpu_power(a7_watt, &power_val);
+    printf("\ta7 %s: %0.4f\n", "Watt", power_val);
+    writeCSV(7, power_val, "a", "Watt");
+
+    cpu_power(a15_volt, &power_val);
+    printf("\ta15 %s: %0.4f\n", "Voltage", power_val);
+    writeCSV(15, power_val, "a", "Voltage");
+
+    cpu_power(a15_amp, &power_val);
+    printf("\ta15 %s: %0.4f\n", "Amp", power_val);
+    writeCSV(15, power_val, "a", "Voltage");
+
+    cpu_power(a15_watt, &power_val);
+    printf("\ta15 %s: %0.4f\n", "Watt", power_val);
+    writeCSV(15, power_val, "a", "Watt");
+    
     update_cycle++;
     printf ("\n");
   }
@@ -163,5 +224,9 @@ int main (void)
   /* Ctrl + C quit, therefore this will not be reached. We rely on the kernel to close this file */
   fclose (cpu_usage_fptr);
   fclose (cpu_temp_fptr);
+  for (power_count = 0; power_count < 6; power_count++)
+  {
+    fclose (powerfptr[power_count]);
+  }
   return 0;
 }
