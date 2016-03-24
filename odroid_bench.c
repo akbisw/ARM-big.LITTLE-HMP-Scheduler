@@ -88,6 +88,16 @@ int cpu_power (FILE *fp, float *power)
   { return 1; }
 }
 
+void enable_sensors() 
+{
+  // Open sensor files for writing only. Write from the beginning "w" mode
+  FILE *a15sensors = fopen("/sys/bus/i2c/drivers/INA231/3-0040/enable", "w");
+  FILE *a7sensors = fopen("/sys/bus/i2c/drivers/INA231/3-0045/enable", "w");
+  fprintf(a15sensors, "%d", 1);
+  fprintf(a7sensors, "%d", 1);
+  fclose(a15sensors); fclose(a7sensors);
+}
+
 int main (void)
 {
   FILE *cpu_usage_fptr;
@@ -106,7 +116,8 @@ int main (void)
   {
     perror ("Error");
   }
-
+  /* Enable sensor readings for A7 and A15 clusters */
+  enable_sensors();
   /* Voltage/AMP/Watt Readings */
   // A7VAW A15VAW
   float power_readings[6];
